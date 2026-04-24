@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bee Logic</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background: #fefce8; 
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            touch-action: none;
+        }
+        
+        #map {
+            width: 300px;
+            height: 300px;
+            background-color: #dcfce7;
+            background-image: 
+                linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+            background-size: 50px 50px;
+            position: relative;
+            border: 4px solid #86efac;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.1);
+        }
+
+        .sprite {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            z-index: 10;
+        }
+
+        #bee-sprite {
+            z-index: 100;
+            font-size: 34px;
+            transform-origin: center;
+        }
+
+        @keyframes waggle { 
+            0%, 100% { transform: scaleX(-1) rotate(var(--r)) scale(1); }
+            50% { transform: scaleX(-1) rotate(calc(var(--r) + 20deg)) scale(1.1) translate(4px, 0); }
+        }
+        .dancing { animation: waggle 0.15s infinite linear; }
+
+        .cmd-btn {
+            transition: transform 0.1s;
+        }
+        .cmd-btn:active { transform: scale(0.9); }
+        .cmd-btn:disabled { opacity: 0.4; filter: grayscale(1); pointer-events: none; }
+
+        #sequence-container {
+            max-height: 100%;
+            overflow-y: auto;
+            padding-bottom: 20px;
+        }
+
+        .step-tag {
+            animation: slideIn 0.2s ease-out forwards;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        #sequence-container::-webkit-scrollbar {
+            width: 4px;
+        }
+        #sequence-container::-webkit-scrollbar-thumb {
+            background: #eab308;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="p-4 bg-yellow-400 flex justify-between items-center shadow-md shrink-0">
+        <div class="flex items-center gap-2">
+            <span class="text-2xl">🐝</span>
+            <h1 class="text-lg font-800 text-yellow-900 tracking-tight">BEE CODER</h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <div class="bg-yellow-900/10 px-3 py-1 rounded-full text-xs font-800 text-yellow-900">
+                NECTAR: <span id="score">0</span>/3
+            </div>
+            <button onclick="resetGame()" class="bg-white/50 p-2 rounded-lg text-yellow-900 hover:bg-white transition-colors">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 flex flex-col md:flex-row overflow-hidden">
+        <div class="flex-1 flex flex-col items-center justify-center p-4 bg-white/40 shrink-0 md:shrink">
+            <div id="map">
+                <div id="entities"></div>
+                <div id="bee-sprite" class="sprite">🐝</div>
+            </div>
+            <p id="hint" class="mt-4 text-[10px] font-bold text-green-700 opacity-60 uppercase tracking-widest text-center">3 Flowers then back Home (0,0)</p>
+        </div>
+
+        <div class="flex-1 md:w-80 bg-white border-t md:border-t-0 md:border-l border-gray-100 flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-4 flex-1 overflow-hidden flex flex-col">
+                <label class="text-[10px] font-800 text-gray-400 uppercase tracking-widest block mb-2">Logic Sequence</label>
+                <div id="sequence-container" class="space-y-1.5 overflow-y-auto">
+                    <div id="empty-hint" class="text-center py-8 border-2 border-dashed border-gray-50 rounded-2xl">
+                        <p class="text-xs text-gray-300 font-medium italic">Add commands...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 bg-gray-50 border-t border-gray-100 shrink-0">
+                <div class="grid grid-cols-3 gap-2 mb-3">
+                    <button onclick="pushCommand('move')" class="cmd-btn bg-blue-500 text-white py-2 px-1 rounded-xl shadow-md flex flex-col items-center">
+                        <span class="text-lg">⬆️</span>
+                        <span class="text-[8px] font-bold uppercase mt-0.5">Move</span>
+                    </button>
+                    <button onclick="pushCommand('left')" class="cmd-btn bg-orange-400 text-white py-2 px-1 rounded-xl shadow-md flex flex-col items-center">
+                        <span class="text-lg">↩️</span>
+                        <span class="text-[8px] font-bold uppercase mt-0.5">Left</span>
+                    </button>
+                    <button onclick="pushCommand('right')" class="cmd-btn bg-orange-400 text-white py-2 px-1 rounded-xl shadow-md flex flex-col items-center">
+                        <span class="text-lg">↪️</span>
+                        <span class="text-[8px] font-bold uppercase mt-0.5">Right</span>
+                    </button>
+                    <button onclick="pushCommand('dance')" class="cmd-btn bg-purple-500 text-white py-2 px-1 rounded-xl shadow-md flex flex-col items-center">
+                        <span class="text-lg">💃</span>
+                        <span class="text-[8px] font-bold uppercase mt-0.5">Dance</span>
+                    </button>
+                    <button onclick="pushCommand('nectar')" class="cmd-btn bg-pink-500 text-white py-2 px-1 rounded-xl shadow-md flex flex-col items-center">
+                        <span class="text-lg">🌸</span>
+                        <span class="text-[8px] font-bold uppercase mt-0.5">Nectar</span>
+                    </button>
+                    <button id="run-btn" onclick="executeProgram()" class="cmd-btn bg-green-600 text-white py-2 px-1 rounded-xl shadow-lg flex flex-col items-center">
+                        <span class="text-lg">▶️</span>
+                        <span class="text-[8px] font-bold uppercase mt-0.5">Run</span>
+                    </button>
+                </div>
+                <button onclick="clearSequence()" class="w-full text-[9px] font-bold text-gray-400 py-1 hover:text-red-500 transition-colors uppercase tracking-widest">Clear Sequence</button>
+            </div>
+        </div>
+    </main>
+
+    <div id="success-screen" class="hidden fixed inset-0 bg-yellow-400/95 z-[200] flex items-center justify-center p-6 text-center">
+        <div class="bg-white p-8 rounded-[32px] shadow-2xl max-w-sm w-full">
+            <span class="text-6xl block mb-4">🍯</span>
+            <h2 class="text-2xl font-black text-yellow-900 mb-2 uppercase">Golden Harvest!</h2>
+            <p class="text-yellow-700 font-medium mb-6 italic text-sm">You've successfully coded the bee!</p>
+            <button onclick="resetGame()" class="bg-yellow-500 hover:bg-yellow-400 text-yellow-950 w-full py-3 rounded-xl font-bold text-lg shadow-lg transition-transform active:scale-95">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        const GRID_CELL = 50;
+        const GRID_MAX = 6;
+        
+        // rot: 0:Right, 1:Down, 2:Left, 3:Up
+        let beePos = { x: 0, y: 0, rot: 0 }; 
+        let flowers = [
+            { x: 3, y: 1, collected: false },
+            { x: 4, y: 4, collected: false },
+            { x: 1, y: 5, collected: false }
+        ];
+        let commands = [];
+        let score = 0;
+        let isPlaying = false;
+
+        function updateVisuals() {
+            const ent = document.getElementById('entities');
+            ent.innerHTML = '';
+
+            const hive = document.createElement('div');
+            hive.className = 'sprite';
+            hive.style.left = '0px';
+            hive.style.top = '0px';
+            hive.innerHTML = '🏠';
+            ent.appendChild(hive);
+
+            flowers.forEach(f => {
+                const fl = document.createElement('div');
+                fl.className = `sprite transition-all duration-700 ${f.collected ? 'opacity-20 scale-50' : 'opacity-100'}`;
+                fl.style.left = `${f.x * GRID_CELL}px`;
+                fl.style.top = `${f.y * GRID_CELL}px`;
+                fl.innerHTML = '🌸';
+                ent.appendChild(fl);
+            });
+
+            updateBee();
+        }
+
+        function updateBee() {
+            const bee = document.getElementById('bee-sprite');
+            
+            // Visual mapping for mirrored emoji (scaleX(-1))
+            // 0 (Right) -> 0deg rotation
+            // 1 (Down)  -> -90deg rotation
+            // 2 (Left)  -> -180deg rotation
+            // 3 (Up)    -> -270deg rotation (or 90deg)
+            const angles = [0, -90, -180, -270];
+            const angle = angles[beePos.rot];
+            
+            bee.style.left = `${beePos.x * GRID_CELL}px`;
+            bee.style.top = `${beePos.y * GRID_CELL}px`;
+            
+            // We use scaleX(-1) to flip the 🐝 emoji so it points right at 0deg.
+            // We apply rotation AFTER flipping to keep movement directionally sane.
+            bee.style.transform = `scaleX(-1) rotate(${angle}deg)`;
+            bee.style.setProperty('--r', `${angle}deg`);
+        }
+
+        function pushCommand(type) {
+            if (isPlaying) return;
+            commands.push(type);
+            renderSequence();
+            const container = document.getElementById('sequence-container');
+            setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
+        }
+
+        function clearSequence() {
+            if (isPlaying) return;
+            commands = [];
+            renderSequence();
+        }
+
+        function renderSequence() {
+            const container = document.getElementById('sequence-container');
+            const hint = document.getElementById('empty-hint');
+            const steps = container.querySelectorAll('.step-tag');
+            steps.forEach(s => s.remove());
+
+            if (commands.length === 0) {
+                hint.classList.remove('hidden');
+                return;
+            }
+
+            hint.classList.add('hidden');
+            commands.forEach((cmd, i) => {
+                const div = document.createElement('div');
+                div.className = `step-tag p-2 rounded-lg border flex items-center gap-2 text-[9px] font-800 ${getStyle(cmd)}`;
+                div.innerHTML = `<span class="opacity-30">#${i + 1}</span><span class="uppercase">${cmd}</span>`;
+                container.appendChild(div);
+            });
+        }
+
+        function getStyle(cmd) {
+            switch(cmd) {
+                case 'move': return 'bg-blue-50 border-blue-100 text-blue-600';
+                case 'left':
+                case 'right': return 'bg-orange-50 border-orange-100 text-orange-600';
+                case 'dance': return 'bg-purple-50 border-purple-100 text-purple-600';
+                case 'nectar': return 'bg-pink-50 border-pink-100 text-pink-600';
+            }
+        }
+
+        async function executeProgram() {
+            if (isPlaying || commands.length === 0) return;
+            isPlaying = true;
+            setControlsEnabled(false);
+            const stepDivs = document.querySelectorAll('.step-tag');
+
+            for (let i = 0; i < commands.length; i++) {
+                stepDivs[i].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                stepDivs[i].classList.add('ring-2', 'ring-yellow-400', 'bg-yellow-50');
+                await runAction(commands[i]);
+                await new Promise(r => setTimeout(r, 600));
+                stepDivs[i].classList.remove('ring-2', 'ring-yellow-400', 'bg-yellow-50');
+            }
+            isPlaying = false;
+            setControlsEnabled(true);
+            checkWin();
+        }
+
+        async function runAction(cmd) {
+            const bee = document.getElementById('bee-sprite');
+            switch(cmd) {
+                case 'move':
+                    // Move based on current rotation (where mirrored head points)
+                    // 0: Right, 1: Down, 2: Left, 3: Up
+                    if (beePos.rot === 0 && beePos.x < GRID_MAX - 1) beePos.x++;
+                    else if (beePos.rot === 1 && beePos.y < GRID_MAX - 1) beePos.y++;
+                    else if (beePos.rot === 2 && beePos.x > 0) beePos.x--;
+                    else if (beePos.rot === 3 && beePos.y > 0) beePos.y--;
+                    break;
+                case 'left':
+                    // In a mirrored world, turning 'Left' is a clockwise adjustment to our index (0->1->2->3)
+                    beePos.rot = (beePos.rot + 3) % 4;
+                    break;
+                case 'right':
+                    // Turning 'Right' is a counter-clockwise adjustment (0->3->2->1)
+                    beePos.rot = (beePos.rot + 1) % 4;
+                    break;
+                case 'dance':
+                    bee.classList.add('dancing');
+                    await new Promise(r => setTimeout(r, 800));
+                    bee.classList.remove('dancing');
+                    break;
+                case 'nectar':
+                    const flower = flowers.find(f => f.x === beePos.x && f.y === beePos.y && !f.collected);
+                    if (flower) {
+                        flower.collected = true;
+                        score++;
+                        document.getElementById('score').innerText = score;
+                        updateVisuals();
+                    }
+                    break;
+            }
+            updateBee();
+        }
+
+        function setControlsEnabled(enabled) {
+            const btns = document.querySelectorAll('.cmd-btn');
+            btns.forEach(b => b.disabled = !enabled);
+        }
+
+        function checkWin() {
+            if (score >= 3 && beePos.x === 0 && beePos.y === 0) {
+                document.getElementById('success-screen').classList.remove('hidden');
+            }
+        }
+
+        function resetGame() {
+            beePos = { x: 0, y: 0, rot: 0 };
+            flowers.forEach(f => f.collected = false);
+            score = 0;
+            commands = [];
+            isPlaying = false;
+            document.getElementById('score').innerText = "0";
+            document.getElementById('success-screen').classList.add('hidden');
+            setControlsEnabled(true);
+            renderSequence();
+            updateVisuals();
+        }
+
+        window.onload = updateVisuals;
+    </script>
+</body>
+</html>
